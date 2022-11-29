@@ -1,0 +1,2 @@
+# AdsMAXApplovin
+Ads_MAXApplovin
