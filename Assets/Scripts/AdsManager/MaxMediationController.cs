@@ -2,26 +2,47 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using System;
+using UnityEngine.UI;
 public class MaxMediationController : MonoBehaviour
 {
-
-    private string bannerAdUnitId = "YOUR_AD_UNIT_ID";
-    private string interstitialAdUnitId = "YOUR_AD_UNIT_ID";
-    private string rewardedAdUnitId = "YOUR_AD_UNIT_ID";
+    private const string MaxSdkKey = "ENTER_MAX_SDK_KEY_HERE";
+    private string bannerAdUnitId = "ENTER_BANNER_AD_UNIT_ID_HERE";
+    private string interstitialAdUnitId = "ENTER_INTERSTITIAL_AD_UNIT_ID_HERE";
+    private string rewardedAdUnitId = "ENTER_REWARD_AD_UNIT_ID_HERE";
     private string AppOpenAdUnitId = "YOUR_AD_UNIT_ID";
     private int interstitialRetryAttempt;
+    public Text txtInterstitialStatus;
+    public Text txtRewardedStatus;
     public void Init()
     {
         MaxSdkCallbacks.OnSdkInitializedEvent += sdkConfiguration =>
         {
+            Debug.Log("MAX SDK Initialized");
 #if !UNITY_EDITOR
             InitAOA();
 #endif
             InitInterstitialAds();
             InitRewardedAds();
             InitBannerAds();
+#if UNITY_EDITOR
+            LoadInterstitial();
+            LoadRewardedAd();
+#endif
         };
+
+        MaxSdk.SetSdkKey(MaxSdkKey);
+        MaxSdk.InitializeSdk();
     }
+    void InterstitialReady()
+    {
+        txtInterstitialStatus.text = "Load Done";
+    }
+    void RewardedReady()
+    {
+        txtRewardedStatus.text = "Load Done";
+    }
+
+
     #region Interstitial Ad
     private void InitInterstitialAds()
     {
@@ -37,6 +58,7 @@ public class MaxMediationController : MonoBehaviour
         // Interstitial ad is ready for you to show. MaxSdk.IsInterstitialReady(adUnitId) now returns 'true'
         // Reset retry attempt
         interstitialRetryAttempt = 0;
+        InterstitialReady();
         Debug.Log("MAX > Interstitial Ad ready.");
     }
     private void OnInterstitialFailedEvent(string adUnitId, MaxSdkBase.ErrorInfo error)
@@ -68,13 +90,18 @@ public class MaxMediationController : MonoBehaviour
     {
         //When Interstitial display
     }
+    public bool IsInterstitialLoaded()
+    {
+        return MaxSdk.IsInterstitialReady(interstitialAdUnitId);
+    }
     public void LoadInterstitial()
     {
+        txtInterstitialStatus.text = "Loading...";
         MaxSdk.LoadInterstitial(interstitialAdUnitId);
     }
     public void ShowInterstitial(string placement)
     {
-        if (MaxSdk.IsInterstitialReady(interstitialAdUnitId))
+        if (IsInterstitialLoaded())
         {
             MaxSdk.ShowInterstitial(interstitialAdUnitId, placement);
         }
@@ -98,6 +125,7 @@ public class MaxMediationController : MonoBehaviour
         // Rewarded ad is ready to be shown. MaxSdk.IsRewardedAdReady(rewardedAdUnitId) will now return 'true'
         // Reset retry attempt
         rewardedRetryAttempt = 0;
+        RewardedReady();
         Debug.Log("MAX > Rewarded Ad ready.");
     }
     private void OnRewardedAdLoadFailedEvent(string adUnitId, MaxSdkBase.ErrorInfo errorInfo)
@@ -119,12 +147,12 @@ public class MaxMediationController : MonoBehaviour
     }
     private void OnRewardedAdDisplayedEvent(string adUnitId, MaxSdkBase.AdInfo adInfo)
     {
-        //When user click Rewarded
+        //When Rewarded display
     }
 
     private void OnRewardedAdClickedEvent(string adUnitId, MaxSdkBase.AdInfo adInfo)
     {
-        //When Rewarded display
+        //When user click Rewarded  
     }
     private void OnRewardedAdDismissedEvent(string adUnitId, MaxSdkBase.AdInfo adInfo)
     {
@@ -136,11 +164,20 @@ public class MaxMediationController : MonoBehaviour
         // Rewarded ad was displayed and user should receive the reward
         Debug.Log("Rewarded ad received reward");
     }
+    public bool IsRewardedAdLoaded()
+    {
+        return MaxSdk.IsRewardedAdReady(rewardedAdUnitId);
+    }
     public void LoadRewardedAd()
     {
+        txtRewardedStatus.text = "Loading...";
         MaxSdk.LoadRewardedAd(rewardedAdUnitId);
     }
-
+    public void ShowRewardedAd(string placement)
+    {
+        if (IsRewardedAdLoaded())
+            MaxSdk.ShowRewardedAd(rewardedAdUnitId, placement);
+    }
     #endregion
     #region Banner Ad
     private void InitBannerAds()
@@ -182,6 +219,10 @@ public class MaxMediationController : MonoBehaviour
         // Banner ad revenue paid. Use this callback to track user revenue.
         Debug.Log("Banner ad revenue paid");
     }
+    public bool IsBannerAdLoaded()
+    {
+        return true;
+    }
     public void ShowBanner()
     {
         MaxSdk.ShowBanner(bannerAdUnitId);
@@ -198,12 +239,44 @@ public class MaxMediationController : MonoBehaviour
     private void InitAOA()
     {
         MaxSdkCallbacks.AppOpen.OnAdHiddenEvent += OnAppOpenDismissedEvent;
-        //MaxSdkCallbacks.AppOpen.OnAdLoadedEvent += OnAppOpenLoadedEvent;
-        //MaxSdkCallbacks.AppOpen.OnAdLoadFailedEvent += OnAppOpenLoadFailedEvent;
-        //MaxSdkCallbacks.AppOpen.OnAdDisplayFailedEvent += OnAppOpenFailedToDisplayEvent;
+        MaxSdkCallbacks.AppOpen.OnAdLoadedEvent += OnAppOpenLoadedEvent;
+        MaxSdkCallbacks.AppOpen.OnAdLoadFailedEvent += OnAppOpenLoadFailedEvent;
+        MaxSdkCallbacks.AppOpen.OnAdDisplayFailedEvent += OnAppOpenFailedToDisplayEvent;
     }
     public void OnAppOpenDismissedEvent(string adUnitId, MaxSdkBase.AdInfo adInfo)
     {
+        MaxSdk.LoadAppOpenAd(AppOpenAdUnitId);
+    }
+    public void OnAppOpenLoadedEvent(string adUnitId, MaxSdkBase.AdInfo adInfo)
+    {
+        Debug.Log("Aoa loaded successfully, ID: " + AppOpenAdUnitId);
+        if (isFirstLoad)
+        {
+            isFirstLoad = false;
+            ShowAdIfReady();
+#if !UNITY_EDITOR
+            LoadInterstitial();
+            LoadRewardedAd();
+#endif
+        }
+    }
+
+    private void OnAppOpenLoadFailedEvent(string adUnitId, MaxSdkBase.ErrorInfo errorInfo)
+    {
+        if (isFirstLoad)
+        {
+            isFirstLoad = false;
+#if !UNITY_EDITOR
+            LoadInterstitial();
+            LoadRewardedAd();
+#endif
+        }
+        Debug.Log("Load AOA Failed.");
+    }
+    private void OnAppOpenFailedToDisplayEvent(string adUnitId, MaxSdkBase.ErrorInfo errorInfo, MaxSdkBase.AdInfo adInfo)
+    {
+        // Rewarded ad failed to display. We recommend loading the next ad
+        Debug.Log("AOA ad failed to display with error code: " + errorInfo.Code);
 
         MaxSdk.LoadAppOpenAd(AppOpenAdUnitId);
     }
